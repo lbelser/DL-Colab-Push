@@ -1,0 +1,31 @@
+# Virtual Environment
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Distribution / Packaging
+dist/
+build/
+*.egg-info/
+
+# Environment variables
+.env
+
+# Claude
+.claude/
+
+# Dataset (local only, not tracked by git)
+wikiart
+
+# Model outputs (large files, not tracked by git)
+outputs/
+
+# OS
+.DS_Store
