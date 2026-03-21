@@ -17,6 +17,7 @@ from sklearn.metrics import (
 )
 from PIL import Image
 
+from collections import Counter
 from config import CLASS_NAMES, NUM_CLASSES, PLOT_DIR
 from utils import save_figure
 
@@ -210,3 +211,141 @@ def evaluate_model(model, test_ds, test_paths, test_labels, model_name="model"):
     show_misclassified(test_paths, y_true, y_pred)
 
     return {"accuracy": acc, **topk}
+
+
+# ──────────────────────────────────────────────
+# 7. Per-artist accuracy vs class size
+# ──────────────────────────────────────────────
+def plot_accuracy_vs_class_size(y_true, y_pred, all_labels, model_name="model"):
+    """
+    Scatter plot: does having more training images help?
+
+    Each dot is one artist. X-axis = number of training images,
+    Y-axis = per-class accuracy. If there's a positive correlation,
+    it means the model benefits from more data and underrepresented
+    artists are at a disadvantage.
+
+    Parameters
+    ----------
+    all_labels : list of all original string labels (before split)
+                 used to count total images per artist
+    """
+    # Count images per artist in the full dataset
+    class_counts = Counter(all_labels)
+
+    # Per-class accuracy from predictions
+    per_class_acc = {}
+    for idx, name in enumerate(CLASS_NAMES):
+        mask = y_true == idx
+        if mask.sum() > 0:
+            per_class_acc[name] = (y_pred[mask] == idx).mean()
+
+    # Build aligned arrays
+    artists = list(per_class_acc.keys())
+    accs = [per_class_acc[a] for a in artists]
+    sizes = [class_counts[a] for a in artists]
+
+    fig, ax = plt.subplots(figsize=(10, 7))
+    ax.scatter(sizes, accs, s=80, alpha=0.7, edgecolors="black", linewidths=0.5)
+
+    # Label each point with the artist name
+    for i, artist in enumerate(artists):
+        ax.annotate(
+            artist.replace("_", " "),
+            (sizes[i], accs[i]),
+            fontsize=7, ha="left", va="bottom",
+            xytext=(5, 3), textcoords="offset points",
+        )
+
+    # Trend line
+    z = np.polyfit(sizes, accs, 1)
+    p = np.poly1d(z)
+    x_line = np.linspace(min(sizes), max(sizes), 100)
+    ax.plot(x_line, p(x_line), "--", color="red", alpha=0.5, label=f"Trend (slope={z[0]:.5f})")
+
+    ax.set_xlabel("Number of images in dataset")
+    ax.set_ylabel("Per-class accuracy (test set)")
+    ax.set_title(f"Accuracy vs Class Size — {model_name}")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    fig.tight_layout()
+    save_figure(fig, f"{model_name}_accuracy_vs_class_size.png")
+    plt.show()
+
+    # Compute correlation
+    corr = np.corrcoef(sizes, accs)[0, 1]
+    print(f"Pearson correlation (class size vs accuracy): {corr:.3f}")
+    return corr
+
+
+# ──────────────────────────────────────────────
+# 8. Confusion cluster analysis
+# ──────────────────────────────────────────────
+def analyse_confusion_clusters(y_true, y_pred, model_name="model", top_n=10):
+    """
+    Identify the most common artist-pair confusions.
+
+    Why: these pairs often reflect real art-historical relationships.
+    For example, Impressionists (Monet, Pissarro, Renoir) share
+    colour palettes and brushwork. Surfacing these helps us write
+    a richer analysis in the report.
+    """
+    cm = confusion_matrix(y_true, y_pred)
+    # Zero the diagonal (correct predictions don't count)
+    np.fill_diagonal(cm, 0)
+
+    # Find the top-N off-diagonal entries
+    pairs = []
+    for i in range(NUM_CLASSES):
+        for j in range(NUM_CLASSES):
+            if cm[i, j] > 0:
+                pairs.append((cm[i, j], CLASS_NAMES[i], CLASS_NAMES[j]))
+
+    pairs.sort(reverse=True)
+
+    print(f"\nTop {top_n} confusions — {model_name}")
+    print(f"{'Count':>5}  {'True artist':<25} → {'Predicted as':<25}")
+    print("─" * 60)
+    for count, true, pred in pairs[:top_n]:
+        print(f"{count:5d}  {true.replace('_', ' '):<25} → {pred.replace('_', ' '):<25}")
+
+    return pairs[:top_n]
+
+
+# ──────────────────────────────────────────────
+# 9. Multi-model comparison bar chart
+# ──────────────────────────────────────────────
+def plot_model_comparison(results_dict):
+    """
+    Grouped bar chart comparing all models across metrics.
+
+    Parameters
+    ----------
+    results_dict : dict of {model_name: {"accuracy": ..., "Top-3": ..., "Top-5": ...}}
+    """
+    models = list(results_dict.keys())
+    metrics = ["accuracy", "Top-3", "Top-5"]
+    x = np.arange(len(models))
+    width = 0.25
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    for i, metric in enumerate(metrics):
+        values = [results_dict[m].get(metric, 0) for m in models]
+        bars = ax.bar(x + i * width, values, width, label=metric)
+        # Add value labels on bars
+        for bar, val in zip(bars, values):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.005,
+                    f"{val:.1%}", ha="center", va="bottom", fontsize=8)
+
+    ax.set_ylabel("Accuracy")
+    ax.set_title("Model Comparison — All Metrics")
+    ax.set_xticks(x + width)
+    ax.set_xticklabels([m.replace("_", "\n") for m in models], fontsize=9)
+    ax.legend()
+    ax.set_ylim(0, 1.05)
+    ax.grid(True, alpha=0.3, axis="y")
+
+    fig.tight_layout()
+    save_figure(fig, "model_comparison_bars.png")
+    plt.show()

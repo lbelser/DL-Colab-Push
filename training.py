@@ -21,19 +21,58 @@ from config import (
 # ──────────────────────────────────────────────
 # 1. Compile a model with standard settings
 # ──────────────────────────────────────────────
-def compile_model(model, learning_rate=LEARNING_RATE):
+def compile_model(model, learning_rate=LEARNING_RATE, label_smoothing=0.0):
     """
     Compile a model with:
       - Adam optimiser (adaptive learning rate, works well out of the box)
       - Sparse categorical crossentropy (integer labels, not one-hot)
       - Accuracy metric (easy to interpret during training)
+
+    Parameters
+    ----------
+    label_smoothing : float (0.0 to 0.2 typical)
+        Replaces hard 0/1 targets with soft targets (e.g. 0.9 / 0.004).
+        Why: with 23 classes and subjective boundaries between artists,
+        label smoothing prevents the model from becoming overconfident
+        and acts as a form of regularisation.
     """
+    if label_smoothing > 0:
+        # With label smoothing we need a loss that accepts a smoothing param.
+        # SparseCategoricalCrossentropy doesn't support it directly, so we
+        # use CategoricalCrossentropy with a custom wrapper that one-hot
+        # encodes on the fly. Alternatively, we can use the from_logits
+        # approach. But the simplest: use Keras's built-in loss object.
+        loss = keras.losses.SparseCategoricalCrossentropy()
+        # Actually, Keras 3 doesn't have label_smoothing on Sparse loss.
+        # We use CategoricalCrossentropy + one-hot conversion in the pipeline.
+        # For simplicity, keep sparse and apply smoothing via the loss:
+        loss = _smoothed_sparse_loss(label_smoothing)
+    else:
+        loss = "sparse_categorical_crossentropy"
+
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
-        loss="sparse_categorical_crossentropy",
+        loss=loss,
         metrics=["accuracy"],
     )
     return model
+
+
+def _smoothed_sparse_loss(smoothing):
+    """
+    Create a loss function that applies label smoothing to sparse
+    integer labels by one-hot encoding them first.
+    """
+    import tensorflow as tf
+    from config import NUM_CLASSES
+
+    base_loss = keras.losses.CategoricalCrossentropy(label_smoothing=smoothing)
+
+    def loss_fn(y_true, y_pred):
+        y_true_onehot = tf.one_hot(tf.cast(y_true, tf.int32), NUM_CLASSES)
+        return base_loss(y_true_onehot, y_pred)
+
+    return loss_fn
 
 
 # ──────────────────────────────────────────────
@@ -107,7 +146,8 @@ def compute_weights(train_labels):
 # 4. Train a model (one-call convenience)
 # ──────────────────────────────────────────────
 def train_model(model, train_ds, val_ds, train_labels,
-                model_name="model", epochs=EPOCHS, learning_rate=LEARNING_RATE):
+                model_name="model", epochs=EPOCHS, learning_rate=LEARNING_RATE,
+                label_smoothing=0.0):
     """
     Full training pipeline: compile → compute weights → fit.
 
@@ -120,12 +160,13 @@ def train_model(model, train_ds, val_ds, train_labels,
     model_name  : used in checkpoint filenames and TensorBoard
     epochs      : maximum number of training epochs
     learning_rate : initial learning rate
+    label_smoothing : float, soft-target regularisation (0.0 = off)
 
     Returns
     -------
     history : keras History object (contains loss/accuracy per epoch)
     """
-    compile_model(model, learning_rate=learning_rate)
+    compile_model(model, learning_rate=learning_rate, label_smoothing=label_smoothing)
     class_weights = compute_weights(train_labels)
     callbacks = get_callbacks(model_name)
 

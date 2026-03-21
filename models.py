@@ -10,6 +10,7 @@ We follow an iterative approach (simple → complex):
 All models output NUM_CLASSES logits with softmax activation.
 """
 
+import numpy as np
 import keras
 from keras import layers, Model
 from config import IMG_SIZE, NUM_CLASSES
@@ -147,6 +148,81 @@ def build_efficientnet(freeze_base=True):
 
     model = Model(inputs, outputs, name="EfficientNetB0_Transfer")
     return model
+
+
+# ──────────────────────────────────────────────
+# 4. Transfer learning — EfficientNetB2
+# ──────────────────────────────────────────────
+def build_efficientnet_b2(freeze_base=True):
+    """
+    EfficientNetB2 pretrained on ImageNet with a custom head.
+
+    Why B2 instead of B0:
+      B0 achieved 73.9% vs ResNet50's 78.8%. The likely bottleneck
+      was model capacity — B0 has only 9M params while ResNet50 has
+      25.6M. B2 scales up to ~9.2M params with native 260×260
+      resolution, giving it more feature channels and depth to
+      capture the diversity of 23 artistic styles.
+
+    We still use 224×224 input to keep the comparison fair and
+    avoid reprocessing the data pipeline.
+    """
+    base = keras.applications.EfficientNetB2(
+        weights="imagenet",
+        include_top=False,
+        input_shape=(*IMG_SIZE, 3),
+    )
+    base.trainable = not freeze_base
+
+    inputs = layers.Input(shape=(*IMG_SIZE, 3), name="input_image")
+    x = layers.Rescaling(255.0)(inputs)
+    x = base(x, training=False)
+
+    x = layers.GlobalAveragePooling2D()(x)
+    x = layers.Dropout(0.5)(x)
+    x = layers.Dense(256, activation="relu")(x)
+    x = layers.Dropout(0.3)(x)
+    outputs = layers.Dense(NUM_CLASSES, activation="softmax")(x)
+
+    model = Model(inputs, outputs, name="EfficientNetB2_Transfer")
+    return model
+
+
+# ──────────────────────────────────────────────
+# 5. Ensemble — average predictions from multiple models
+# ──────────────────────────────────────────────
+def build_ensemble(models):
+    """
+    Combine multiple trained models into an ensemble that averages
+    their softmax predictions.
+
+    Why ensembling works: different architectures learn different
+    features and make different errors. Averaging their predictions
+    cancels out individual mistakes — the ensemble is typically more
+    accurate than any single model.
+
+    Parameters
+    ----------
+    models : list of trained keras Models (must share the same input shape)
+
+    Returns an EnsemblePredictor (not a keras Model, but has a predict method).
+    """
+    return EnsemblePredictor(models)
+
+
+class EnsemblePredictor:
+    """
+    Lightweight wrapper that averages predictions from multiple models.
+    Compatible with our evaluation pipeline (has a .predict method).
+    """
+    def __init__(self, models):
+        self.models = models
+        self.name = "Ensemble"
+
+    def predict(self, x, verbose=0):
+        """Average the softmax outputs of all models."""
+        preds = [m.predict(x, verbose=verbose) for m in self.models]
+        return np.mean(preds, axis=0)
 
 
 # ──────────────────────────────────────────────
