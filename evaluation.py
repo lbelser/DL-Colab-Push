@@ -349,3 +349,53 @@ def plot_model_comparison(results_dict):
     fig.tight_layout()
     save_figure(fig, "model_comparison_bars.png")
     plt.show()
+
+
+# ──────────────────────────────────────────────
+# 10. Per-artist F1 comparison across models
+# ──────────────────────────────────────────────
+def plot_per_artist_f1(model_reports, filename="per_artist_f1_comparison.png"):
+    """
+    Grouped bar chart comparing per-artist F1 scores across models.
+
+    Parameters
+    ----------
+    model_reports : dict of {model_name: (y_true, y_pred)}
+        Each entry provides the true and predicted labels for a model.
+    """
+    from sklearn.metrics import f1_score
+
+    artist_labels = [name.replace("_", " ") for name in CLASS_NAMES]
+    model_names = list(model_reports.keys())
+    n_models = len(model_names)
+
+    # Compute per-class F1 for each model
+    f1_per_model = {}
+    for name, (y_true, y_pred) in model_reports.items():
+        f1s = f1_score(y_true, y_pred, labels=range(NUM_CLASSES), average=None)
+        f1_per_model[name] = f1s
+
+    # Sort artists by ensemble (last model) F1 for readability
+    last_model = model_names[-1]
+    sort_idx = np.argsort(f1_per_model[last_model])
+
+    fig, ax = plt.subplots(figsize=(12, 10))
+    y_pos = np.arange(NUM_CLASSES)
+    bar_height = 0.8 / n_models
+
+    for i, name in enumerate(model_names):
+        f1s_sorted = f1_per_model[name][sort_idx]
+        ax.barh(y_pos + i * bar_height, f1s_sorted, bar_height,
+                label=name, alpha=0.85)
+
+    ax.set_yticks(y_pos + bar_height * (n_models - 1) / 2)
+    ax.set_yticklabels([artist_labels[j] for j in sort_idx], fontsize=9)
+    ax.set_xlabel("F1 Score")
+    ax.set_title("Per-Artist F1 Score — Model Comparison")
+    ax.legend(loc="lower right", fontsize=9)
+    ax.set_xlim(0, 1.05)
+    ax.grid(True, alpha=0.3, axis="x")
+
+    fig.tight_layout()
+    save_figure(fig, filename)
+    plt.show()
