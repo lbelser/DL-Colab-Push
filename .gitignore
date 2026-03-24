@@ -24,8 +24,9 @@ build/
 # Dataset (local only, not tracked by git)
 wikiart
 
-# Model outputs (large files, not tracked by git)
-outputs/
+# Model weights (large binary files, not tracked by git)
+outputs/models/
+outputs/logs/
 
 # OS
 .DS_Store

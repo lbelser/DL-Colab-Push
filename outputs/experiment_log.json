@@ -1,0 +1,149 @@
+[
+  {
+    "id": 1,
+    "name": "Baseline_CNN",
+    "timestamp": "2026-03-21T13:58:39.554831",
+    "config": {
+      "epochs": 30,
+      "lr": 0.001,
+      "augmentation": "basic",
+      "architecture": "3-block CNN from scratch"
+    },
+    "results": {
+      "test_accuracy": 0.482,
+      "top3": 0.715,
+      "top5": 0.815,
+      "val_accuracy": 0.504
+    },
+    "notes": "Underfitting (train ~44%, val ~50%). 3-block CNN with GAP and dropout lacks capacity for 23 artistic styles. But 48.2% is 11x above random (4.3%) — learns colour and texture cues. Confirms transfer learning is needed."
+  },
+  {
+    "id": 2,
+    "name": "ResNet50_Transfer",
+    "timestamp": "2026-03-21T13:58:39.555778",
+    "config": {
+      "epochs": 30,
+      "lr": 0.0001,
+      "augmentation": "basic",
+      "architecture": "ResNet50 frozen base + custom head"
+    },
+    "results": {
+      "test_accuracy": 0.77,
+      "val_accuracy": 0.77
+    },
+    "notes": "Frozen base achieves 77% — the +29pp jump over baseline proves ImageNet features (edges, textures, shapes) transfer strongly to paintings. Train ≈ val: no overfitting with frozen weights."
+  },
+  {
+    "id": 3,
+    "name": "ResNet50_FineTuned",
+    "timestamp": "2026-03-21T13:58:39.556361",
+    "config": {
+      "epochs": 15,
+      "lr": 1e-05,
+      "augmentation": "basic",
+      "architecture": "ResNet50 unfrozen from layer 140",
+      "fine_tuning": true,
+      "unfrozen_from": 140
+    },
+    "results": {
+      "test_accuracy": 0.788,
+      "top3": 0.931,
+      "top5": 0.966,
+      "val_accuracy": 0.809
+    },
+    "notes": "+4pp over frozen base. But train-val gap (~11pp: 92% train vs 81% val) signals overfitting. LR reduced from 1e-5 to 5e-6 at epoch 14."
+  },
+  {
+    "id": 4,
+    "name": "EfficientNetB0_Transfer",
+    "timestamp": "2026-03-21T13:58:39.557170",
+    "config": {
+      "epochs": 30,
+      "lr": 0.0001,
+      "augmentation": "basic",
+      "architecture": "EfficientNetB0 frozen base + custom head"
+    },
+    "results": {
+      "test_accuracy": 0.725,
+      "val_accuracy": 0.725
+    },
+    "notes": "5pp below ResNet50 frozen. B0 is a smaller model (5.3M vs 25.6M params) — likely too little capacity for 23 diverse artists."
+  },
+  {
+    "id": 5,
+    "name": "EfficientNetB0_FineTuned",
+    "timestamp": "2026-03-21T13:58:39.557660",
+    "config": {
+      "epochs": 15,
+      "lr": 1e-05,
+      "augmentation": "basic",
+      "architecture": "EfficientNetB0 unfrozen from layer 200",
+      "fine_tuning": true,
+      "unfrozen_from": 200
+    },
+    "results": {
+      "test_accuracy": 0.739,
+      "top3": 0.897,
+      "top5": 0.943,
+      "val_accuracy": 0.747
+    },
+    "notes": "Only +2pp from fine-tuning. Still improving at epoch 15 — could benefit from more epochs. Smaller gain than ResNet suggests the base features were already more limiting."
+  },
+  {
+    "id": 6,
+    "name": "ResNet50_v2_FineTuned",
+    "timestamp": "2026-03-21T23:47:36.649775",
+    "config": {
+      "epochs": "30+25",
+      "lr": "1e-4→1e-5",
+      "augmentation": "strong",
+      "label_smoothing": 0.1,
+      "unfrozen_from": 140
+    },
+    "results": {
+      "accuracy": 0.7876061969015492,
+      "Top-1": 0.7876061969015492,
+      "Top-3": 0.9270364817591205,
+      "Top-5": 0.9640179910044977
+    },
+    "notes": "Phase 2: strong augmentation + label smoothing. Same 78.8% as Phase 1 — stronger augmentation made training harder (frozen val 75.9% vs 77.0%) without improving generalisation. Train-val gap increased to 12.8pp. Random crop likely destructive for paintings where composition is a style signal."
+  },
+  {
+    "id": 7,
+    "name": "EfficientNetB2_FineTuned",
+    "timestamp": "2026-03-21T23:48:07.616077",
+    "config": {
+      "epochs": "30+25",
+      "lr": "1e-4→1e-5",
+      "augmentation": "strong",
+      "label_smoothing": 0.1,
+      "unfrozen_from": 200
+    },
+    "results": {
+      "accuracy": 0.7611194402798601,
+      "Top-1": 0.7611194402798601,
+      "Top-3": 0.912543728135932,
+      "Top-5": 0.9495252373813093
+    },
+    "notes": "Phase 2: B2 upgrade (+2.2pp over B0). Train-val gap only 3.6pp vs ResNet's 12.8pp — B2 generalises better despite lower absolute accuracy. Confirms B0's bottleneck was capacity, not architecture."
+  },
+  {
+    "id": 8,
+    "name": "Ensemble_ResNet50v2_EffNetB2",
+    "timestamp": "2026-03-21T23:49:24.878854",
+    "config": {
+      "models": [
+        "ResNet50_v2_FineTuned",
+        "EfficientNetB2_FineTuned"
+      ],
+      "strategy": "softmax averaging"
+    },
+    "results": {
+      "accuracy": 0.8050974512743628,
+      "Top-1": 0.8050974512743628,
+      "Top-3": 0.9340329835082459,
+      "Top-5": 0.9610194902548725
+    },
+    "notes": "Softmax averaging of ResNet50 v2 + EfficientNetB2. +1.7pp over best single model. Different architectures make complementary errors — ensemble lifts weakest artists most."
+  }
+]
