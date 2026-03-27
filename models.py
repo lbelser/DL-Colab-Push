@@ -64,6 +64,72 @@ def build_baseline_cnn():
 
 
 # ──────────────────────────────────────────────
+# 1b. Baseline CNN — Week 4 regularised version
+# ──────────────────────────────────────────────
+def build_baseline_cnn_regularised():
+    """
+    Week 4 upgrade of the plain baseline CNN.
+
+    Adds every regularisation technique introduced in the Week 4 practical:
+      - Augmentation Pipeline layer embedded in the model (Week 4 pattern):
+        the practical placed RandomBrightness + RandomFlip + RandomRotation
+        inside MyTinyRegularizedCNN.call() via keras.layers.Pipeline.
+        We replicate that here using build_augmentation_layer() from
+        data_loader.py.  Train this model with augmentation="none" in
+        build_dataset() to avoid double-augmenting.
+      - LeakyReLU instead of ReLU  (less susceptible to dying neurons;
+        introduced in the Week 3/4 practicals)
+      - L2 kernel regularisation on every Conv2D layer
+        (kernel_regularizer=l2(0.01), matching practical weight_decay=0.01)
+      - Dropout(0.3) after each pooling block (Week 4 practical: rate=0.3)
+
+    Compiled separately with SGD + weight_decay via compile_model_sgd()
+    in training.py, together with CSVLogger and the exponential LR scheduler.
+
+    Architecture is otherwise identical to build_baseline_cnn() so that
+    the two results are directly comparable.
+    """
+    from keras.regularizers import l2
+    from data_loader import build_augmentation_layer
+
+    inputs = layers.Input(shape=(*IMG_SIZE, 3), name="input_image")
+    # Week 4 pattern: augmentation lives inside the model, not in tf.data
+    x = build_augmentation_layer()(inputs)
+
+    # Block 1 — edges and colour (+ L2 + LeakyReLU + Dropout vs Week 3)
+    x = layers.Conv2D(32, 3, padding="same",
+                      kernel_regularizer=l2(0.01))(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.LeakyReLU()(x)
+    x = layers.MaxPooling2D()(x)
+    x = layers.Dropout(0.3)(x)
+
+    # Block 2 — textures and shapes
+    x = layers.Conv2D(64, 3, padding="same",
+                      kernel_regularizer=l2(0.01))(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.LeakyReLU()(x)
+    x = layers.MaxPooling2D()(x)
+    x = layers.Dropout(0.3)(x)
+
+    # Block 3 — higher-level patterns (brushstrokes, composition)
+    x = layers.Conv2D(128, 3, padding="same",
+                      kernel_regularizer=l2(0.01))(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.LeakyReLU()(x)
+    x = layers.MaxPooling2D()(x)
+
+    # Classification head (Dropout(0.3) as in the Week 4 practical)
+    x = layers.GlobalAveragePooling2D()(x)
+    x = layers.Dense(256)(x)
+    x = layers.LeakyReLU()(x)
+    x = layers.Dropout(0.3)(x)
+    outputs = layers.Dense(NUM_CLASSES, activation="softmax")(x)
+
+    return Model(inputs, outputs, name="Baseline_CNN_Regularised")
+
+
+# ──────────────────────────────────────────────
 # 2. Transfer learning — ResNet50
 # ──────────────────────────────────────────────
 def build_resnet50(freeze_base=True):

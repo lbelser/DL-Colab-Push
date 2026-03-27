@@ -51,6 +51,16 @@ LR_REDUCE_PATIENCE = 3
 LR_REDUCE_FACTOR = 0.5
 
 # ──────────────────────────────────────────────
+# Baseline CNN (Week 3 / Week 4 practical settings)
+# ──────────────────────────────────────────────
+# SGD learning rate — matches the Week 3/4 practical
+BASELINE_LR = 0.01
+# L2 weight-decay coefficient added in Week 4
+BASELINE_WEIGHT_DECAY = 0.01
+# Exponential LR decay factor per epoch (Week 4: lr *= 0.95)
+LR_DECAY_FACTOR = 0.95
+
+# ──────────────────────────────────────────────
 # Class names (derived automatically from folder names)
 # ──────────────────────────────────────────────
 CLASS_NAMES = sorted(

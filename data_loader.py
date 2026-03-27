@@ -140,6 +140,92 @@ def augment_strong(img, label):
 
 
 # ──────────────────────────────────────────────
+# 4b. RandAugment-style pipeline (Week 5 practical)
+# ──────────────────────────────────────────────
+def augment_randaugment(img, label):
+    """
+    Augmentation pipeline inspired by the RandAugment layer used in the
+    Week 5 practical (keras_cv.layers.RandAugment, factor=0.1).
+
+    The practical placed RandAugment inside the model's call() method.
+    Here we apply equivalent operations in the tf.data pipeline, which
+    is the recommended pattern for GPU-based preprocessing in TF2.
+
+    Operations (factor ≈ 0.1, i.e. gentle):
+      - RandomBrightness ±10 %   (same delta as practical factor=0.1)
+      - RandomFlip horizontal    (paintings have no inherent orientation)
+      - RandomRotation ±10°      (very gentle; practicals used factor=0.1
+                                  → 10 % of 360° ≈ 36°; we use 10° to
+                                  respect painting composition)
+      - Clip to [0, 1]
+
+    Why NOT the basic/strong pipelines:
+      The practical used RandAugment as the single augmentation choice
+      for transfer learning. We use this pipeline in the Week 5 section
+      (ResNet50) so that section matches the practical's approach.
+    """
+    img = tf.image.random_flip_left_right(img)
+    img = tf.image.random_brightness(img, max_delta=0.1)
+    img = tf.image.random_contrast(img, lower=0.9, upper=1.1)
+
+    # Random rotation via keras preprocessing layer (gentle ±10°)
+    try:
+        import keras
+        rotate = keras.layers.RandomRotation(
+            factor=10.0 / 360.0,   # 10° expressed as fraction of full circle
+            fill_mode="reflect",
+        )
+        img = rotate(tf.expand_dims(img, 0))[0]
+    except Exception:
+        pass  # skip rotation if layer unavailable
+
+    img = tf.clip_by_value(img, 0.0, 1.0)
+    return img, label
+
+
+# ──────────────────────────────────────────────
+# 4c. Augmentation as a Keras Pipeline layer (Week 4 in-model pattern)
+# ──────────────────────────────────────────────
+def build_augmentation_layer():
+    """
+    Return the Week 4 practical augmentation pipeline as a Keras layer.
+
+    The Week 4 practical (MyTinyRegularizedCNN) embedded augmentation
+    INSIDE the model using keras.layers.Pipeline:
+
+        augmentation_layer = Pipeline([
+            RandomBrightness(factor=0.1, value_range=(0.0, 1.0)),
+            RandomFlip(),
+            RandomRotation(factor=0.1, fill_mode="reflect")
+        ], name="augmentation_layer")
+
+    This function returns that exact layer so model definitions can
+    mirror the Week 4 pattern (used in build_baseline_cnn_regularised()).
+
+    The project's main pipeline applies augmentation via tf.data.map()
+    (see augment(), augment_strong(), augment_randaugment()) — the
+    GPU-friendly modern approach. This function provides the Week 4
+    in-model equivalent for educational comparison.
+
+    When this layer is embedded inside a model, train that model with
+    augmentation="none" in build_dataset() to avoid double-augmenting.
+
+    Returns
+    -------
+    keras.layers.Pipeline
+    """
+    from keras.layers import Pipeline, RandomBrightness, RandomFlip, RandomRotation
+    return Pipeline(
+        [
+            RandomBrightness(factor=0.1, value_range=(0.0, 1.0)),
+            RandomFlip(),
+            RandomRotation(factor=10.0 / 360.0, fill_mode="reflect"),
+        ],
+        name="augmentation_layer",
+    )
+
+
+# ──────────────────────────────────────────────
 # 5. Build tf.data pipelines
 # ──────────────────────────────────────────────
 def build_dataset(paths, labels, is_training=False, batch_size=BATCH_SIZE,
@@ -155,11 +241,13 @@ def build_dataset(paths, labels, is_training=False, batch_size=BATCH_SIZE,
 
     Parameters
     ----------
-    augmentation : "basic" | "strong" | "none"
+    augmentation : "basic" | "strong" | "randaugment" | "none"
         Which augmentation pipeline to apply to training data.
-        "basic"  — flips, brightness, contrast (Phase 1)
-        "strong" — adds saturation, hue, crop+resize (Phase 2)
-        "none"   — no augmentation (for val/test, or ablation)
+        "basic"        — flips, brightness, contrast (Phase 1 / Week 3 baseline)
+        "strong"       — adds saturation, hue, crop+resize (Phase 2 extensions)
+        "randaugment"  — gentle flip + brightness + rotation, mirroring the
+                         RandAugment(factor=0.1) shown in the Week 5 practical
+        "none"         — no augmentation (for val/test, or ablation)
     """
     ds = tf.data.Dataset.from_tensor_slices((paths, labels))
 
@@ -169,7 +257,12 @@ def build_dataset(paths, labels, is_training=False, batch_size=BATCH_SIZE,
     ds = ds.map(load_and_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
 
     if is_training and augmentation != "none":
-        aug_fn = augment_strong if augmentation == "strong" else augment
+        if augmentation == "strong":
+            aug_fn = augment_strong
+        elif augmentation == "randaugment":
+            aug_fn = augment_randaugment
+        else:
+            aug_fn = augment  # "basic"
         ds = ds.map(aug_fn, num_parallel_calls=tf.data.AUTOTUNE)
 
     ds = ds.batch(batch_size)

@@ -28,5 +28,10 @@ wikiart
 outputs/models/
 outputs/logs/
 
+# Practicals — exclude datasets and model checkpoints (large binaries)
+Practicals/week_5/flowers/
+Practicals/**/*.keras
+Practicals/**/metrics.csv
+
 # OS
 .DS_Store
