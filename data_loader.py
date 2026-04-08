@@ -9,6 +9,15 @@ import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
+# Module-level rotation layer — created once at import time so it is not
+# re-instantiated on every tf.data.map() call (performance + thread safety).
+_RA_ROTATE = None
+try:
+    import keras as _keras
+    _RA_ROTATE = _keras.layers.RandomRotation(factor=10.0 / 360.0, fill_mode="reflect")
+except Exception:
+    pass
+
 from config import (
     IMG_SIZE, BATCH_SIZE, SEED,
     VAL_SPLIT, TEST_SPLIT, CLASS_NAMES, NUM_CLASSES,
@@ -168,16 +177,9 @@ def augment_randaugment(img, label):
     img = tf.image.random_brightness(img, max_delta=0.1)
     img = tf.image.random_contrast(img, lower=0.9, upper=1.1)
 
-    # Random rotation via keras preprocessing layer (gentle ±10°)
-    try:
-        import keras
-        rotate = keras.layers.RandomRotation(
-            factor=10.0 / 360.0,   # 10° expressed as fraction of full circle
-            fill_mode="reflect",
-        )
-        img = rotate(tf.expand_dims(img, 0))[0]
-    except Exception:
-        pass  # skip rotation if layer unavailable
+    # Random rotation via module-level layer (created once at import time)
+    if _RA_ROTATE is not None:
+        img = _RA_ROTATE(tf.expand_dims(img, 0))[0]
 
     img = tf.clip_by_value(img, 0.0, 1.0)
     return img, label
@@ -191,16 +193,12 @@ def build_augmentation_layer():
     Return the Week 4 practical augmentation pipeline as a Keras layer.
 
     The Week 4 practical (MyTinyRegularizedCNN) embedded augmentation
-    INSIDE the model using keras.layers.Pipeline:
+    INSIDE the model using keras.layers.Pipeline (Keras CV). We replicate
+    the same transforms here using keras.Sequential, which is available in
+    all standard keras/tf.keras builds without extra dependencies.
 
-        augmentation_layer = Pipeline([
-            RandomBrightness(factor=0.1, value_range=(0.0, 1.0)),
-            RandomFlip(),
-            RandomRotation(factor=0.1, fill_mode="reflect")
-        ], name="augmentation_layer")
-
-    This function returns that exact layer so model definitions can
-    mirror the Week 4 pattern (used in build_baseline_cnn_regularised()).
+    This function returns that layer so model definitions can mirror the
+    Week 4 pattern (used in build_baseline_cnn_regularised()).
 
     The project's main pipeline applies augmentation via tf.data.map()
     (see augment(), augment_strong(), augment_randaugment()) — the
@@ -212,10 +210,11 @@ def build_augmentation_layer():
 
     Returns
     -------
-    keras.layers.Pipeline
+    keras.Sequential
     """
-    from keras.layers import Pipeline, RandomBrightness, RandomFlip, RandomRotation
-    return Pipeline(
+    import keras
+    from keras.layers import RandomBrightness, RandomFlip, RandomRotation
+    return keras.Sequential(
         [
             RandomBrightness(factor=0.1, value_range=(0.0, 1.0)),
             RandomFlip(),

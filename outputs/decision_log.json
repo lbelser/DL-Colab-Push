@@ -51,7 +51,7 @@
     "context": "ResNet50 fine-tuned showed 11pp train-val gap (92% vs 81%). Overfitting.",
     "reasoning": "Stronger augmentation acts as regularisation: random crops force the model to recognise style from partial views, saturation/hue shifts make it robust to colour reproduction differences. This should close the train-val gap.",
     "action": "Added: random crop (85-100%) + resize, random saturation (0.8-1.2), random hue (±0.02). Kept existing: flip, brightness, contrast.",
-    "outcome": "ResNet50 v2 test accuracy: 78.8% (was 78.8% in Phase 1). Train-val gap to be checked in training curves."
+    "outcome": "ResNet50 v2 test accuracy: 78.8% (was 78.8% in Phase 1). Train-val gap increased to 12.8pp — random crop likely destructive for paintings where composition is a style signal."
   },
   {
     "id": 7,
@@ -88,5 +88,41 @@
     "reasoning": "ResNet uses residual connections that preserve spatial identity through skip paths. EfficientNet uses MBConv blocks with squeeze-excitation that dynamically reweigh channel importance. These architectural differences mean they attend to different visual cues and make different errors. Averaging softmax outputs cancels individual mistakes at zero additional training cost.",
     "action": "Average softmax predictions of ResNet50_v2_FineTuned + EfficientNetB2_FineTuned.",
     "outcome": "Ensemble accuracy: 80.5%. vs ResNet50 v2: 78.8%, vs EffNetB2: 76.1%."
+  },
+  {
+    "id": 11,
+    "title": "CutMix augmentation for Phase 3",
+    "timestamp": "2026-03-25T00:00:00.000000",
+    "context": "Dataset is heavily class-imbalanced (Van Gogh: 1,322 vs Dalí: 336). Several Impressionist artists share highly similar visual styles (Monet, Pissarro, Sisley). Standard per-image augmentation does not address class scarcity directly.",
+    "reasoning": "CutMix (Yun et al., ICCV 2019) operates at batch level: it pastes a rectangular patch from one image onto another and mixes their labels proportionally. This implicitly oversamples rare classes (they get mixed into majority-class images) and produces soft mixed targets that teach the model the degree of stylistic similarity between artists. Alpha=1.0 (Beta(1,1) = Uniform) matches the paper's recommended setting. One-hot labels are required — uses CategoricalCrossentropy(label_smoothing=0.1). Applied after batching via tf.py_function because CutMix needs to shuffle pairs within a batch.",
+    "action": "Implemented cutmix.py with build_dataset_cutmix(). Base model: ResNet50 (same as best Phase 2 model) to isolate CutMix effect.",
+    "outcome": "Pending training run."
+  },
+  {
+    "id": 12,
+    "title": "Add Vision Transformer (ViT-B/16) as third model",
+    "timestamp": "2026-03-25T00:00:00.000000",
+    "context": "All existing models (ResNet50, EfficientNetB2) are convolutional architectures that capture local features via sliding filters. Artistic style often depends on whole-canvas composition and long-range spatial relationships that CNNs miss.",
+    "reasoning": "ViT (Dosovitskiy et al., ICLR 2021) splits the image into 14×14=196 patches of 16×16 pixels and processes them with 12 transformer encoder blocks with multi-head self-attention, modelling pairwise relationships between ALL patches simultaneously. The CLS token aggregates global information for classification. Pre-trained on ImageNet-21k (14M images, 21k categories) — richer than ImageNet-1k used by ResNet/EfficientNet. Orthogonally different inductive bias from CNNs maximises ensemble diversity. Phase 2 unfreezes full backbone at LR=1e-5 (hub.KerasLayer does not expose sub-layer indices for partial unfreezing).",
+    "action": "Implemented vit_model.py using TF Hub sayakpaul/vit_b16_fe/1. Same two-phase training and head architecture as ResNet/EfficientNet for fair comparison.",
+    "outcome": "Pending training run. Note: requires tensorflow-hub dependency."
+  },
+  {
+    "id": 13,
+    "title": "Test-Time Augmentation (TTA)",
+    "timestamp": "2026-03-25T00:00:00.000000",
+    "context": "Model predictions are sensitive to minor input variation. Digitised paintings exhibit natural variation from different museum scanners, resolutions, and JPEG compression levels.",
+    "reasoning": "TTA approximates Bayesian model averaging (Gal & Ghahramani, 2016): generate N randomly-augmented views of each test image and average their softmax outputs. This reduces prediction variance at zero additional training cost. Augmentation policy is deliberately conservative — ONLY horizontal flip + very small brightness/contrast (±5%). NO random crops. Rationale: Phase 2 analysis established that random crops are destructive for paintings because composition is a style signal (Decision #6). N=5 views balances accuracy gain vs inference cost.",
+    "action": "Implemented tta.py with tta_predict() and tta_accuracy(). Interface compatible with predict_on_dataset() for drop-in use with existing evaluation functions.",
+    "outcome": "Pending inference run."
+  },
+  {
+    "id": 14,
+    "title": "Per-class weighted ensemble (3 models: ResNet50 + EfficientNetB2 + ViT)",
+    "timestamp": "2026-03-25T00:00:00.000000",
+    "context": "Phase 2 ensemble used simple equal-weight averaging, implicitly assuming every model is equally good at every class. This is false: ResNet50 has high capacity but tends to overfit rare artists; EfficientNetB2 generalises better but has lower absolute accuracy; ViT may excel at globally-composed styles where CNNs struggle.",
+    "reasoning": "Per-class weighting (simplified stacking, Wolpert 1992): derive weights from per-class validation accuracy of each model, then normalise each column so weights for a given class sum to 1. This lets the ensemble automatically defer to the strongest model per artist without manual tuning. Weights come from the validation set (not test) to prevent data leakage. Both equal-weight and per-class-weighted 3-model ensembles are evaluated so the gain from weighting is directly measurable.",
+    "action": "Implemented ensemble_weighted.py with compute_perclass_weights(), weighted_ensemble_predict(), and print_weight_matrix().",
+    "outcome": "Pending inference run."
   }
 ]
