@@ -15,7 +15,7 @@
       "top5": 0.815,
       "val_accuracy": 0.504
     },
-    "notes": "Underfitting (train ~44%, val ~50%). 3-block CNN with GAP and dropout lacks capacity for 23 artistic styles. But 48.2% is 11x above random (4.3%) — learns colour and texture cues. Confirms transfer learning is needed."
+    "notes": "Underfitting (train ~44%, val ~50%). Too shallow for 23 classes but 48.2% is 11x above random (4.3%), so it's learning something. Transfer learning clearly needed."
   },
   {
     "id": 2,
@@ -31,7 +31,7 @@
       "test_accuracy": 0.77,
       "val_accuracy": 0.77
     },
-    "notes": "Frozen base achieves 77% — the +29pp jump over baseline proves ImageNet features (edges, textures, shapes) transfer strongly to paintings. Train ≈ val: no overfitting with frozen weights."
+    "notes": "Frozen base gets 77% -- +29pp over baseline. ImageNet features transfer well to paintings. Train ~ val: no overfitting with frozen weights."
   },
   {
     "id": 3,
@@ -51,7 +51,7 @@
       "top5": 0.966,
       "val_accuracy": 0.809
     },
-    "notes": "+4pp over frozen base. But train-val gap (~11pp: 92% train vs 81% val) signals overfitting. LR reduced from 1e-5 to 5e-6 at epoch 14."
+    "notes": "+4pp over frozen. But 92% train vs 81% val = 11pp gap, overfitting. LR dropped from 1e-5 to 5e-6 at epoch 14."
   },
   {
     "id": 4,
@@ -67,7 +67,7 @@
       "test_accuracy": 0.725,
       "val_accuracy": 0.725
     },
-    "notes": "5pp below ResNet50 frozen. B0 is a smaller model (5.3M vs 25.6M params) — likely too little capacity for 23 diverse artists."
+    "notes": "5pp below frozen ResNet50. B0 is probably too small (5.3M vs 25.6M params) for 23 diverse artists."
   },
   {
     "id": 5,
@@ -87,7 +87,7 @@
       "top5": 0.943,
       "val_accuracy": 0.747
     },
-    "notes": "Only +2pp from fine-tuning. Still improving at epoch 15 — could benefit from more epochs. Smaller gain than ResNet suggests the base features were already more limiting."
+    "notes": "Only +2pp from fine-tuning. Still improving at epoch 15 -- probably needs more epochs. Smaller gain than ResNet suggests the base features themselves are the bottleneck."
   },
   {
     "id": 6,
@@ -95,7 +95,7 @@
     "timestamp": "2026-03-21T23:47:36.649775",
     "config": {
       "epochs": "30+25",
-      "lr": "1e-4→1e-5",
+      "lr": "1e-4 -> 1e-5",
       "augmentation": "strong",
       "label_smoothing": 0.1,
       "unfrozen_from": 140
@@ -106,7 +106,7 @@
       "Top-3": 0.9270364817591205,
       "Top-5": 0.9640179910044977
     },
-    "notes": "Phase 2: strong augmentation + label smoothing. Same 78.8% as Phase 1 — stronger augmentation made training harder (frozen val 75.9% vs 77.0%) without improving generalisation. Train-val gap increased to 12.8pp. Random crop likely destructive for paintings where composition is a style signal."
+    "notes": "Strong augmentation + label smoothing. Same 78.8% as Phase 1, stronger aug didn't help. Frozen phase was worse (75.9% vs 77.0%). Train-val gap grew to 12.8pp. Random crop seems bad for paintings -- composition is a style signal."
   },
   {
     "id": 7,
@@ -114,7 +114,7 @@
     "timestamp": "2026-03-21T23:48:07.616077",
     "config": {
       "epochs": "30+25",
-      "lr": "1e-4→1e-5",
+      "lr": "1e-4 -> 1e-5",
       "augmentation": "strong",
       "label_smoothing": 0.1,
       "unfrozen_from": 200
@@ -125,7 +125,7 @@
       "Top-3": 0.912543728135932,
       "Top-5": 0.9495252373813093
     },
-    "notes": "Phase 2: B2 upgrade (+2.2pp over B0). Train-val gap only 3.6pp vs ResNet's 12.8pp — B2 generalises better despite lower absolute accuracy. Confirms B0's bottleneck was capacity, not architecture."
+    "notes": "B2 upgrade: +2.2pp over B0. Train-val gap only 3.6pp vs ResNet's 12.8pp -- B2 generalises better even with lower absolute accuracy."
   },
   {
     "id": 8,
@@ -144,6 +144,6 @@
       "Top-3": 0.9340329835082459,
       "Top-5": 0.9610194902548725
     },
-    "notes": "Softmax averaging of ResNet50 v2 + EfficientNetB2. +1.7pp over best single model. Different architectures make complementary errors — ensemble lifts weakest artists most."
+    "notes": "Softmax averaging. 80.5% = +1.7pp over best single model. Different architectures make different errors."
   }
 ]

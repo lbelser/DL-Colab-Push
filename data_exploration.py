@@ -1,9 +1,5 @@
 """
 Exploratory Data Analysis (EDA) for the WikiArt dataset.
-
-Functions in this module help us understand the dataset BEFORE
-building any models — class distribution, image dimensions,
-sample visualisation, and pixel-level statistics.
 """
 
 import os
@@ -22,14 +18,7 @@ from utils import save_figure
 # 1. Catalogue every image path + label
 # ──────────────────────────────────────────────
 def build_file_list():
-    """
-    Walk through the dataset directory and return two aligned lists:
-      - file_paths : absolute paths to every JPEG image
-      - labels     : the artist name for each image
-
-    This gives us a flat view of the entire dataset that is easy
-    to analyse and later split into train / val / test.
-    """
+    """Walk dataset directory and return (file_paths, labels) lists."""
     file_paths, labels = [], []
     for artist in CLASS_NAMES:
         artist_dir = os.path.join(DATA_DIR, artist)
@@ -44,16 +33,8 @@ def build_file_list():
 # 2. Class distribution
 # ──────────────────────────────────────────────
 def plot_class_distribution(labels):
-    """
-    Bar chart showing how many paintings each artist has.
-
-    Why this matters: heavy class imbalance can bias the model
-    towards the majority class. We need to know this upfront so
-    we can decide whether to use class weights, oversampling, or
-    stratified splits.
-    """
+    """Bar chart of paintings per artist."""
     counts = Counter(labels)
-    # Sort by count (descending) for readability
     artists = [a for a, _ in counts.most_common()]
     values = [c for _, c in counts.most_common()]
 
@@ -61,10 +42,9 @@ def plot_class_distribution(labels):
     palette = sns.color_palette("viridis", len(artists))
     ax.barh(artists, values, color=palette)
     ax.set_xlabel("Number of paintings")
-    ax.set_title("Class distribution — paintings per artist")
-    ax.invert_yaxis()  # most prolific artist on top
+    ax.set_title("Class distribution -- paintings per artist")
+    ax.invert_yaxis()
 
-    # Add count labels on the bars
     for i, v in enumerate(values):
         ax.text(v + 5, i, str(v), va="center", fontsize=9)
 
@@ -79,14 +59,7 @@ def plot_class_distribution(labels):
 # 3. Image dimension statistics
 # ──────────────────────────────────────────────
 def analyse_image_dimensions(file_paths, sample_size=500):
-    """
-    Sample a subset of images and record their width, height,
-    and aspect ratio.
-
-    Why: knowing the typical image size helps us choose a sensible
-    resize target (e.g. 224×224) and understand how much information
-    we lose during resizing.
-    """
+    """Sample images and report width/height/aspect ratio stats."""
     rng = np.random.RandomState(42)
     indices = rng.choice(len(file_paths), size=min(sample_size, len(file_paths)), replace=False)
 
@@ -100,14 +73,13 @@ def analyse_image_dimensions(file_paths, sample_size=500):
     widths, heights = np.array(widths), np.array(heights)
     aspects = widths / heights
 
-    print(f"Width  — min: {widths.min()}, max: {widths.max()}, "
+    print(f"Width  -- min: {widths.min()}, max: {widths.max()}, "
           f"mean: {widths.mean():.0f}, median: {np.median(widths):.0f}")
-    print(f"Height — min: {heights.min()}, max: {heights.max()}, "
+    print(f"Height -- min: {heights.min()}, max: {heights.max()}, "
           f"mean: {heights.mean():.0f}, median: {np.median(heights):.0f}")
-    print(f"Aspect — min: {aspects.min():.2f}, max: {aspects.max():.2f}, "
+    print(f"Aspect -- min: {aspects.min():.2f}, max: {aspects.max():.2f}, "
           f"mean: {aspects.mean():.2f}")
 
-    # Scatter plot of width vs height
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
     axes[0].scatter(widths, heights, alpha=0.4, s=10)
     axes[0].set_xlabel("Width (px)")
@@ -129,21 +101,14 @@ def analyse_image_dimensions(file_paths, sample_size=500):
 
 
 # ──────────────────────────────────────────────
-# 4. Sample grid — show example paintings per artist
+# 4. Sample grid
 # ──────────────────────────────────────────────
 def show_sample_images(file_paths, labels, n_per_artist=3):
-    """
-    Display a grid with a few example paintings for each artist.
-
-    Why: a visual check ensures images loaded correctly and gives
-    us intuition about what the model will see — style differences,
-    colour palettes, subject matter, etc.
-    """
+    """Display a few example paintings for each artist."""
     n_artists = len(CLASS_NAMES)
     fig, axes = plt.subplots(n_artists, n_per_artist,
                              figsize=(4 * n_per_artist, 3 * n_artists))
 
-    # Group file paths by artist
     artist_to_files = {}
     for fp, lbl in zip(file_paths, labels):
         artist_to_files.setdefault(lbl, []).append(fp)
@@ -170,14 +135,7 @@ def show_sample_images(file_paths, labels, n_per_artist=3):
 # 5. Per-channel pixel statistics
 # ──────────────────────────────────────────────
 def compute_pixel_statistics(file_paths, sample_size=300):
-    """
-    Compute the mean and standard deviation of pixel values
-    per RGB channel across a random sample of images.
-
-    Why: these statistics tell us whether to use ImageNet
-    normalisation (common for transfer learning) or compute
-    dataset-specific normalisation.
-    """
+    """Compute mean and std of pixel values per RGB channel."""
     rng = np.random.RandomState(42)
     indices = rng.choice(len(file_paths), size=min(sample_size, len(file_paths)), replace=False)
 
@@ -187,7 +145,7 @@ def compute_pixel_statistics(file_paths, sample_size=300):
 
     for idx in tqdm(indices, desc="Computing pixel stats"):
         img = Image.open(file_paths[idx]).convert("RGB").resize((224, 224))
-        arr = np.array(img, dtype=np.float64) / 255.0  # normalise to [0, 1]
+        arr = np.array(img, dtype=np.float64) / 255.0
         channel_sum += arr.sum(axis=(0, 1))
         channel_sq_sum += (arr ** 2).sum(axis=(0, 1))
         pixel_count += arr.shape[0] * arr.shape[1]

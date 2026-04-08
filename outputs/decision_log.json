@@ -1,128 +1,128 @@
 [
   {
     "id": 1,
-    "title": "Use 224×224 input size",
+    "title": "Use 224x224 input size",
     "timestamp": "2026-03-21T13:58:39.618917",
-    "context": "All images are 512×512. Need a fixed size for the neural network.",
-    "reasoning": "224×224 is the standard input for ResNet/EfficientNet pretrained on ImageNet. Using their native resolution avoids mismatched feature scales. We lose 81% of pixels, but classification relies on style, not fine detail.",
+    "context": "All images are 512x512. Need a fixed size for the neural network.",
+    "reasoning": "224x224 is the standard for ResNet/EfficientNet pretrained on ImageNet. Using their native resolution avoids mismatched feature scales. We lose pixels but classification depends on style, not fine detail.",
     "action": "Set IMG_SIZE = (224, 224) in config.py",
-    "outcome": "Works well — no signs that resolution is a bottleneck."
+    "outcome": "Works fine, no signs that resolution is a bottleneck."
   },
   {
     "id": 2,
     "title": "Stratified 70/15/15 split with class weights",
     "timestamp": "2026-03-21T13:58:39.620283",
     "context": "Dataset is imbalanced: 336 (Dali) to 1,322 (Van Gogh) images per artist.",
-    "reasoning": "Stratified splits ensure each artist appears proportionally in train/val/test. Class weights penalise misclassifications on rare classes more heavily, preventing the model from ignoring minority artists.",
+    "reasoning": "Stratified splits keep each artist proportional in train/val/test. Class weights penalise errors on rare classes more, so the model doesn't just ignore minority artists.",
     "action": "sklearn train_test_split with stratify + compute_class_weight('balanced')",
-    "outcome": "Split: 9,337 / 2,002 / 2,001. Class weights range from ~0.6 (Van Gogh) to ~2.0 (Dali)."
+    "outcome": "Split: 9,337 / 2,002 / 2,001. Weights range from ~0.6 (Van Gogh) to ~2.0 (Dali)."
   },
   {
     "id": 3,
     "title": "Start with a baseline CNN before transfer learning",
     "timestamp": "2026-03-21T13:58:39.620845",
-    "context": "Need a reference point to quantify the benefit of pretrained models.",
-    "reasoning": "A from-scratch CNN establishes a lower bound. Architecture: 3 conv blocks (32->64->128) follows the standard doubling pattern — early layers need few filters (edges), deeper layers need more (textures). GlobalAvgPool instead of Flatten avoids parameter explosion. Dropout (0.5, 0.3) regularises against overfitting on ~9K images. Any transfer model that doesn't beat this isn't worth the complexity.",
-    "action": "Built 3-block CNN: Conv(32)→Conv(64)→Conv(128)→GAP→Dense(256)→Softmax(23)",
-    "outcome": "48.2% test accuracy — well above random (4.3%) but limited by model capacity and data size."
+    "context": "Need a reference point to see how much pretrained models actually help.",
+    "reasoning": "3-block CNN (32->64->128) with GAP and dropout. Standard filter doubling pattern. If transfer learning can't beat this, it's not worth the complexity.",
+    "action": "Built Conv(32)->Conv(64)->Conv(128)->GAP->Dense(256)->Softmax(23)",
+    "outcome": "48.2% test accuracy -- well above random (4.3%) but clearly limited."
   },
   {
     "id": 4,
     "title": "Choose ResNet50 and EfficientNetB0 for transfer learning",
     "timestamp": "2026-03-21T13:58:39.621353",
-    "context": "Need pretrained models to compare against the baseline.",
-    "reasoning": "ResNet50: uses residual (skip) connections that solve vanishing gradients, enabling 50 layers deep (25.6M params). Most-studied transfer learning backbone. EfficientNetB0: compound scaling (width + depth + resolution simultaneously) achieves better accuracy-per-parameter. At 5.3M params, tests whether architectural efficiency can compensate for smaller capacity. Two contrasting philosophies give a meaningful comparison.",
-    "action": "Implemented both with frozen base → fine-tuning two-phase approach.",
-    "outcome": "ResNet50: 78.8% | EfficientNetB0: 73.9%. ResNet wins, likely due to larger capacity (25.6M vs 5.3M params)."
+    "context": "Need pretrained models to compare against baseline.",
+    "reasoning": "ResNet50: deep (50 layers, 25.6M params), skip connections help with vanishing gradients, very well-studied for transfer learning. EfficientNetB0: much smaller (5.3M params), uses compound scaling. Two different approaches give a meaningful comparison.",
+    "action": "Implemented both with frozen base -> fine-tuning two-phase approach.",
+    "outcome": "ResNet50: 78.8% | EfficientNetB0: 73.9%. ResNet wins, probably because it has 5x more parameters."
   },
   {
     "id": 5,
-    "title": "Two-phase training: frozen base → fine-tuning",
+    "title": "Two-phase training: frozen base then fine-tuning",
     "timestamp": "2026-03-21T13:58:39.621971",
     "context": "Transfer learning models can be used as fixed feature extractors or fine-tuned.",
-    "reasoning": "Phase 1 (frozen, lr=1e-4): the new head starts random — if we unfreeze everything, its noisy gradients would corrupt pretrained features. Freeze first to let the head stabilise. Phase 2 (fine-tune, lr=1e-5): unfreeze last ~30% of layers. Early layers have generic features (edges, textures) that don't need changing. Later layers have ImageNet-specific features that benefit from adaptation. 10x lower LR ensures gentle updates — 'polish' not 'rebuild'.",
-    "action": "Freeze base for 30 epochs (lr=1e-4), then unfreeze last ~30% of layers for 15 epochs (lr=1e-5).",
-    "outcome": "Fine-tuning improved ResNet50 by +4pp (77%→81% val) and EfficientNetB0 by +2pp (72%→75% val). ResNet showed 11pp train-val gap — overfitting that needs addressing."
+    "reasoning": "Phase 1 (frozen, lr=1e-4): the new head starts random, so if we unfreeze everything the noisy gradients would mess up pretrained features. Let the head learn first. Phase 2 (fine-tune, lr=1e-5): unfreeze last ~30% of layers. Early layers have generic features that are fine as-is. 10x lower LR to avoid breaking what the model already knows.",
+    "action": "Freeze base for 30 epochs (lr=1e-4), then unfreeze last ~30% for 15 epochs (lr=1e-5).",
+    "outcome": "Fine-tuning improved ResNet by +4pp (77%->81% val), EfficientNet by +2pp. ResNet showed 11pp train-val gap though."
   },
   {
     "id": 6,
-    "title": "Upgrade to stronger augmentation",
+    "title": "Try stronger augmentation",
     "timestamp": "2026-03-21T13:58:39.669209",
-    "context": "ResNet50 fine-tuned showed 11pp train-val gap (92% vs 81%). Overfitting.",
-    "reasoning": "Stronger augmentation acts as regularisation: random crops force the model to recognise style from partial views, saturation/hue shifts make it robust to colour reproduction differences. This should close the train-val gap.",
-    "action": "Added: random crop (85-100%) + resize, random saturation (0.8-1.2), random hue (±0.02). Kept existing: flip, brightness, contrast.",
-    "outcome": "ResNet50 v2 test accuracy: 78.8% (was 78.8% in Phase 1). Train-val gap increased to 12.8pp — random crop likely destructive for paintings where composition is a style signal."
+    "context": "ResNet50 fine-tuned: 92% train vs 81% val = 11pp gap. Overfitting.",
+    "reasoning": "More augmentation should help regularise. Random crops force the model to handle partial views, saturation/hue shifts help with colour reproduction differences.",
+    "action": "Added random crop (85-100%) + resize, random saturation (0.8-1.2), random hue (+-0.02) on top of existing flip/brightness/contrast.",
+    "outcome": "ResNet50 v2: still 78.8%. Train-val gap actually got worse (12.8pp). The random crop seems to hurt -- cropping destroys composition and composition matters for painting style."
   },
   {
     "id": 7,
-    "title": "Switch from EfficientNetB0 to EfficientNetB2",
+    "title": "Upgrade EfficientNetB0 to B2",
     "timestamp": "2026-03-21T13:58:39.670780",
-    "context": "B0 achieved 73.9% vs ResNet50's 78.8% despite fine-tuning.",
-    "reasoning": "B0 has only ~5.3M params (backbone) vs ResNet50's 25.6M — likely too small to capture the diversity of 23 artistic styles. B2 scales up width, depth, and resolution (native 260×260, ~9.2M backbone params), offering a better capacity match while remaining more efficient than ResNet.",
-    "action": "Replace EfficientNetB0 with EfficientNetB2 in the comparison. Keep 224×224 input for fair comparison.",
-    "outcome": "EfficientNetB2 test accuracy: 76.1% (B0 was 73.9%). Gap vs ResNet: +2.6%."
+    "context": "B0 got 73.9% vs ResNet50's 78.8% despite fine-tuning.",
+    "reasoning": "B0 only has 5.3M params vs ResNet's 25.6M. Probably just too small for 23 artists. B2 has ~9.2M params, should help.",
+    "action": "Replace B0 with B2. Keep 224x224 for fair comparison.",
+    "outcome": "B2: 76.1% (B0 was 73.9%). Better, but still behind ResNet. Train-val gap is only 3.6pp though vs ResNet's 12.8pp -- B2 generalises better."
   },
   {
     "id": 8,
     "title": "Extend fine-tuning to 25 epochs",
     "timestamp": "2026-03-21T13:58:39.671465",
-    "context": "EfficientNetB0 was still improving at epoch 15. ResNet also had room.",
-    "reasoning": "15 epochs may not be enough for the larger unfrozen parameter space. EarlyStopping (patience=5) will terminate if it truly converges, so extra epochs are safe — they only cost compute, not quality.",
-    "action": "Set fine-tuning epochs to 25 (up from 15). EarlyStopping still active.",
-    "outcome": "Extended fine-tuning completed. Check if EarlyStopping triggered before epoch 25."
+    "context": "EfficientNetB0 was still improving at epoch 15.",
+    "reasoning": "15 epochs might not be enough. EarlyStopping (patience=5) will stop it anyway if it converges, so extra epochs are safe.",
+    "action": "Set fine-tuning epochs to 25 (was 15).",
+    "outcome": "Completed, need to check if EarlyStopping triggered early."
   },
   {
     "id": 9,
     "title": "Add label smoothing (0.1)",
     "timestamp": "2026-03-21T13:58:39.672000",
-    "context": "Models show high confidence on wrong predictions. Hard 0/1 targets encourage overconfidence.",
-    "reasoning": "With 23 classes and subjective style boundaries (e.g. early vs late Picasso), label smoothing converts targets from [0, 1] to [0.004, 0.9]. This regularises the model, improves calibration, and often boosts generalisation.",
-    "action": "Apply label_smoothing=0.1 via CategoricalCrossentropy in compile_model().",
-    "outcome": "Label smoothing applied to both models. Compare loss curves with Phase 1."
+    "context": "Models are very confident on wrong predictions.",
+    "reasoning": "With 23 classes and subjective style boundaries (e.g. Picasso's early classical vs late surrealist periods), hard 0/1 targets push the model to be overconfident. Label smoothing (targets become 0.9/0.004 instead of 1/0) acts as regularisation.",
+    "action": "label_smoothing=0.1 in CategoricalCrossentropy.",
+    "outcome": "Applied to both models. Should help calibration."
   },
   {
     "id": 10,
     "title": "Ensemble ResNet50 v2 + EfficientNetB2",
     "timestamp": "2026-03-21T23:48:07.712291",
-    "context": "Two different architectures with different strengths — potential for complementary errors.",
-    "reasoning": "ResNet uses residual connections that preserve spatial identity through skip paths. EfficientNet uses MBConv blocks with squeeze-excitation that dynamically reweigh channel importance. These architectural differences mean they attend to different visual cues and make different errors. Averaging softmax outputs cancels individual mistakes at zero additional training cost.",
-    "action": "Average softmax predictions of ResNet50_v2_FineTuned + EfficientNetB2_FineTuned.",
-    "outcome": "Ensemble accuracy: 80.5%. vs ResNet50 v2: 78.8%, vs EffNetB2: 76.1%."
+    "context": "Two architectures with different strengths.",
+    "reasoning": "ResNet uses skip connections, EfficientNet uses squeeze-excitation blocks -- they focus on different things and make different errors. Averaging softmax outputs should cancel out some individual mistakes.",
+    "action": "Average softmax predictions of ResNet50_v2 + EfficientNetB2.",
+    "outcome": "80.5% -- best result so far. +1.7pp over best single model."
   },
   {
     "id": 11,
-    "title": "CutMix augmentation for Phase 3",
+    "title": "CutMix augmentation",
     "timestamp": "2026-03-25T00:00:00.000000",
-    "context": "Dataset is heavily class-imbalanced (Van Gogh: 1,322 vs Dalí: 336). Several Impressionist artists share highly similar visual styles (Monet, Pissarro, Sisley). Standard per-image augmentation does not address class scarcity directly.",
-    "reasoning": "CutMix (Yun et al., ICCV 2019) operates at batch level: it pastes a rectangular patch from one image onto another and mixes their labels proportionally. This implicitly oversamples rare classes (they get mixed into majority-class images) and produces soft mixed targets that teach the model the degree of stylistic similarity between artists. Alpha=1.0 (Beta(1,1) = Uniform) matches the paper's recommended setting. One-hot labels are required — uses CategoricalCrossentropy(label_smoothing=0.1). Applied after batching via tf.py_function because CutMix needs to shuffle pairs within a batch.",
-    "action": "Implemented cutmix.py with build_dataset_cutmix(). Base model: ResNet50 (same as best Phase 2 model) to isolate CutMix effect.",
-    "outcome": "Pending training run."
+    "context": "Class imbalance (Van Gogh 1,322 vs Dali 336) and similar Impressionist styles (Monet, Pissarro, Sisley) need softer decision boundaries.",
+    "reasoning": "CutMix (Yun et al. 2019) pastes a patch from one image onto another and mixes labels proportionally. This implicitly oversamples rare classes and trains with soft targets. Alpha=1.0 (uniform cut sizes). Needs one-hot labels + CategoricalCrossentropy. Applied at batch level via tf.py_function.",
+    "action": "Implemented cutmix.py with build_dataset_cutmix(). Using ResNet50 as base to isolate the CutMix effect.",
+    "outcome": "Pending -- needs training run."
   },
   {
     "id": 12,
-    "title": "Add Vision Transformer (ViT-B/16) as third model",
+    "title": "Add ViT-B/16 as third model",
     "timestamp": "2026-03-25T00:00:00.000000",
-    "context": "All existing models (ResNet50, EfficientNetB2) are convolutional architectures that capture local features via sliding filters. Artistic style often depends on whole-canvas composition and long-range spatial relationships that CNNs miss.",
-    "reasoning": "ViT (Dosovitskiy et al., ICLR 2021) splits the image into 14×14=196 patches of 16×16 pixels and processes them with 12 transformer encoder blocks with multi-head self-attention, modelling pairwise relationships between ALL patches simultaneously. The CLS token aggregates global information for classification. Pre-trained on ImageNet-21k (14M images, 21k categories) — richer than ImageNet-1k used by ResNet/EfficientNet. Orthogonally different inductive bias from CNNs maximises ensemble diversity. Phase 2 unfreezes full backbone at LR=1e-5 (hub.KerasLayer does not expose sub-layer indices for partial unfreezing).",
-    "action": "Implemented vit_model.py using TF Hub sayakpaul/vit_b16_fe/1. Same two-phase training and head architecture as ResNet/EfficientNet for fair comparison.",
-    "outcome": "Pending training run. Note: requires tensorflow-hub dependency."
+    "context": "All models so far are CNNs (local filters). Painting style often depends on whole-canvas composition and spatial relationships.",
+    "reasoning": "ViT (Dosovitskiy et al. 2021) splits the image into 16x16 patches and uses self-attention to model relationships between all patches at once. Pretrained on ImageNet-21k (bigger than ImageNet-1k used by ResNet/EfficientNet). Architecturally very different from CNNs, so its errors should be different too -- good for the ensemble.",
+    "action": "Implemented vit_model.py using TF Hub (sayakpaul/vit_b16_fe/1). Same head and two-phase training as the other models.",
+    "outcome": "Pending -- needs training run. Note: hub.KerasLayer doesn't support partial unfreezing, so Phase 2 unfreezes everything at LR=1e-5."
   },
   {
     "id": 13,
     "title": "Test-Time Augmentation (TTA)",
     "timestamp": "2026-03-25T00:00:00.000000",
-    "context": "Model predictions are sensitive to minor input variation. Digitised paintings exhibit natural variation from different museum scanners, resolutions, and JPEG compression levels.",
-    "reasoning": "TTA approximates Bayesian model averaging (Gal & Ghahramani, 2016): generate N randomly-augmented views of each test image and average their softmax outputs. This reduces prediction variance at zero additional training cost. Augmentation policy is deliberately conservative — ONLY horizontal flip + very small brightness/contrast (±5%). NO random crops. Rationale: Phase 2 analysis established that random crops are destructive for paintings because composition is a style signal (Decision #6). N=5 views balances accuracy gain vs inference cost.",
-    "action": "Implemented tta.py with tta_predict() and tta_accuracy(). Interface compatible with predict_on_dataset() for drop-in use with existing evaluation functions.",
-    "outcome": "Pending inference run."
+    "context": "Paintings in the dataset come from different scanners/cameras with different lighting and colour profiles.",
+    "reasoning": "Average predictions over 5 gently augmented views of each test image. Only flip + small brightness/contrast (+-5%). No crops -- we showed in decision #6 that crops hurt for paintings. Costs 5x inference time but no extra training.",
+    "action": "Implemented tta.py with tta_predict().",
+    "outcome": "Pending -- needs inference run."
   },
   {
     "id": 14,
-    "title": "Per-class weighted ensemble (3 models: ResNet50 + EfficientNetB2 + ViT)",
+    "title": "Per-class weighted ensemble (3 models)",
     "timestamp": "2026-03-25T00:00:00.000000",
-    "context": "Phase 2 ensemble used simple equal-weight averaging, implicitly assuming every model is equally good at every class. This is false: ResNet50 has high capacity but tends to overfit rare artists; EfficientNetB2 generalises better but has lower absolute accuracy; ViT may excel at globally-composed styles where CNNs struggle.",
-    "reasoning": "Per-class weighting (simplified stacking, Wolpert 1992): derive weights from per-class validation accuracy of each model, then normalise each column so weights for a given class sum to 1. This lets the ensemble automatically defer to the strongest model per artist without manual tuning. Weights come from the validation set (not test) to prevent data leakage. Both equal-weight and per-class-weighted 3-model ensembles are evaluated so the gain from weighting is directly measurable.",
-    "action": "Implemented ensemble_weighted.py with compute_perclass_weights(), weighted_ensemble_predict(), and print_weight_matrix().",
-    "outcome": "Pending inference run."
+    "context": "Phase 2 ensemble used equal weights, but different models are better at different artists.",
+    "reasoning": "Weight each model per class based on its validation accuracy for that artist. Normalise so weights sum to 1 per class. The ensemble then automatically relies more on whichever model is strongest for a given artist.",
+    "action": "Implemented ensemble_weighted.py. Both equal-weight and per-class-weighted 3-model ensembles will be evaluated.",
+    "outcome": "Pending -- needs trained ViT + inference."
   }
 ]

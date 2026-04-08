@@ -1,15 +1,6 @@
 """
-Experiment & decision tracking for the WikiArt project.
-
-Every modelling choice — what we tried, why, and what happened — is
-logged here so we can reconstruct the full narrative for the report.
-
-Two complementary logs:
-  - **Experiments**: hyperparameters + metrics for every training run
-  - **Decisions**: the reasoning behind each design choice, linked to
-    the experiments that motivated them
-
-Both are persisted to JSON so nothing is lost between notebook sessions.
+Experiment & decision tracking — logs everything to JSON
+so we can reconstruct the narrative for the report.
 """
 
 import json
@@ -22,9 +13,6 @@ EXPERIMENT_LOG_PATH = os.path.join(OUTPUT_DIR, "experiment_log.json")
 DECISION_LOG_PATH = os.path.join(OUTPUT_DIR, "decision_log.json")
 
 
-# ──────────────────────────────────────────────
-# Internal helpers
-# ──────────────────────────────────────────────
 def _load_json(path):
     if os.path.exists(path):
         with open(path, "r") as f:
@@ -38,28 +26,10 @@ def _save_json(path, data):
 
 
 # ──────────────────────────────────────────────
-# 1. Experiment logging
+# Experiment logging
 # ──────────────────────────────────────────────
 def log_experiment(name, config, results, notes=""):
-    """
-    Record a training experiment with its configuration and results.
-
-    Parameters
-    ----------
-    name    : str — identifier (e.g. "ResNet50_FineTuned_v2")
-    config  : dict — hyperparameters (lr, epochs, augmentation, etc.)
-    results : dict — metrics (accuracy, top-3, top-5, etc.)
-    notes   : str — free-text observations about this run
-
-    Example
-    -------
-    log_experiment(
-        name="Baseline_CNN",
-        config={"epochs": 30, "lr": 1e-3, "augmentation": "basic"},
-        results={"test_accuracy": 0.482, "top3": 0.715, "top5": 0.815},
-        notes="Underfitting — model too shallow for 23-class problem",
-    )
-    """
+    """Log a training run: config + results + notes."""
     experiments = _load_json(EXPERIMENT_LOG_PATH)
     entry = {
         "id": len(experiments) + 1,
@@ -76,35 +46,14 @@ def log_experiment(name, config, results, notes=""):
 
 
 def get_experiments():
-    """Return all logged experiments as a list of dicts."""
     return _load_json(EXPERIMENT_LOG_PATH)
 
 
 # ──────────────────────────────────────────────
-# 2. Decision logging
+# Decision logging
 # ──────────────────────────────────────────────
 def log_decision(title, context, reasoning, action, outcome=None):
-    """
-    Record a design decision with its full rationale.
-
-    Parameters
-    ----------
-    title     : str — short label (e.g. "Switch from EfficientNetB0 to B2")
-    context   : str — what situation prompted this decision
-    reasoning : str — why we chose this path over alternatives
-    action    : str — what we concretely did
-    outcome   : str or None — result after implementing (fill in later)
-
-    Example
-    -------
-    log_decision(
-        title="Switch from EfficientNetB0 to B2",
-        context="B0 achieved 73.9% vs ResNet50's 78.8% despite fine-tuning",
-        reasoning="B0 has only 5.3M params vs ResNet50's 25.6M — likely "
-                  "too small to capture the diversity of 23 artistic styles",
-        action="Upgrade to EfficientNetB2 (9.2M params, 260×260 native res)",
-    )
-    """
+    """Log a design decision with context and reasoning."""
     decisions = _load_json(DECISION_LOG_PATH)
     entry = {
         "id": len(decisions) + 1,
@@ -122,10 +71,7 @@ def log_decision(title, context, reasoning, action, outcome=None):
 
 
 def update_decision_outcome(decision_id, outcome):
-    """
-    Fill in the outcome of a previously logged decision
-    once the experiment results are available.
-    """
+    """Fill in the outcome of a previously logged decision."""
     decisions = _load_json(DECISION_LOG_PATH)
     for d in decisions:
         if d["id"] == decision_id:
@@ -138,15 +84,13 @@ def update_decision_outcome(decision_id, outcome):
 
 
 def get_decisions():
-    """Return all logged decisions as a list of dicts."""
     return _load_json(DECISION_LOG_PATH)
 
 
 # ──────────────────────────────────────────────
-# 3. Pretty-print for the notebook
+# Pretty-print for the notebook
 # ──────────────────────────────────────────────
 def print_experiment_summary():
-    """Print a formatted table of all experiments."""
     experiments = get_experiments()
     if not experiments:
         print("No experiments logged yet.")
@@ -166,7 +110,6 @@ def print_experiment_summary():
 
 
 def print_decision_log():
-    """Print the full decision log in a report-friendly format."""
     decisions = get_decisions()
     if not decisions:
         print("No decisions logged yet.")
@@ -176,9 +119,9 @@ def print_decision_log():
     print(f"{'DECISION LOG':^80}")
     print(f"{'='*80}")
     for d in decisions:
-        print(f"\n{'─'*80}")
+        print(f"\n{'-'*80}")
         print(f"  Decision #{d['id']}: {d['title']}")
-        print(f"{'─'*80}")
+        print(f"{'-'*80}")
         print(f"  Context:   {d['context']}")
         print(f"  Reasoning: {d['reasoning']}")
         print(f"  Action:    {d['action']}")

@@ -1,5 +1,5 @@
 """
-Utility functions: reproducibility, plotting helpers, and general tooling.
+Utility functions: seeds, plotting helpers.
 """
 
 import os
@@ -15,10 +15,7 @@ from config import SEED, PLOT_DIR
 # Reproducibility
 # ──────────────────────────────────────────────
 def set_seeds(seed: int = SEED):
-    """
-    Fix all random seeds so that experiments are reproducible.
-    Call this once at the very beginning of any script or notebook.
-    """
+    """Fix all random seeds for reproducibility."""
     random.seed(seed)
     np.random.seed(seed)
     tf.random.set_seed(seed)

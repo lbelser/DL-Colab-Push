@@ -1,8 +1,5 @@
 """
-Central configuration for the WikiArt artist classification project.
-
-All paths, hyperparameters, and constants are defined here so that
-every other module reads from a single source of truth.
+Central configuration — paths, hyperparameters, constants.
 """
 
 import os
