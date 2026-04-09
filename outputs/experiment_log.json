@@ -145,5 +145,80 @@
       "Top-5": 0.9610194902548725
     },
     "notes": "Softmax averaging. 80.5% = +1.7pp over best single model. Different architectures make different errors."
+  },
+  {
+    "id": 9,
+    "name": "ViT_B16_Frozen",
+    "timestamp": "2026-04-09T12:31:59.002174",
+    "config": {
+      "epochs": 30,
+      "lr": 0.0001,
+      "augmentation": "basic",
+      "label_smoothing": 0.0,
+      "architecture": "ViT-B/16 frozen backbone (TF Hub, ImageNet-21k)",
+      "fine_tuning": false
+    },
+    "results": {
+      "accuracy": 0.7946026986506747,
+      "Top-1": 0.7946026986506747,
+      "Top-3": 0.9240379810094953,
+      "Top-5": 0.9620189905047476
+    },
+    "notes": "Frozen backbone only (fine-tuning skipped -- too slow on CPU). Val: 78.1%, Test: 79.5%."
+  },
+  {
+    "id": 10,
+    "name": "TTA_All_Models",
+    "timestamp": "2026-04-09T12:54:33.831394",
+    "config": {
+      "n_augments": 5,
+      "augmentation": "flip + brightness+-5% + contrast+-5%"
+    },
+    "results": {
+      "ResNet50_v2_TTA": 0.7891054472763618,
+      "EfficientNetB2_TTA": 0.7661169415292354,
+      "ViT_B16_TTA": 0.7956021989005497
+    },
+    "notes": "ResNet50: 78.8% -> 78.9% (+0.1%), EfficientNetB2: 76.1% -> 76.6% (+0.5%), ViT: 79.5% -> 79.6% (+0.1%)"
+  },
+  {
+    "id": 11,
+    "name": "Ensemble_3models_Weighted",
+    "timestamp": "2026-04-09T13:07:24.460391",
+    "config": {
+      "models": [
+        "ResNet50_v2",
+        "EfficientNetB2",
+        "ViT_B16"
+      ],
+      "strategy": "per-class weighted (val accuracy)"
+    },
+    "results": {
+      "accuracy": 0.8335832083958021,
+      "Top-1": 0.8335832083958021,
+      "Top-3": 0.9405297351324338,
+      "Top-5": 0.9690154922538731
+    },
+    "notes": "Per-class weighted: 83.4%. Equal-weight: 83.2%."
+  },
+  {
+    "id": 12,
+    "name": "Ensemble_3models_Equal",
+    "timestamp": "2026-04-09T13:07:24.461112",
+    "config": {
+      "models": [
+        "ResNet50_v2",
+        "EfficientNetB2",
+        "ViT_B16"
+      ],
+      "strategy": "equal-weight softmax averaging"
+    },
+    "results": {
+      "accuracy": 0.8315842078960519,
+      "Top-1": 0.8315842078960519,
+      "Top-3": 0.9425287356321839,
+      "Top-5": 0.9690154922538731
+    },
+    "notes": "Equal-weight baseline for comparison with per-class weighted."
   }
 ]

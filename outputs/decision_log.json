@@ -105,7 +105,7 @@
     "context": "All models so far are CNNs (local filters). Painting style often depends on whole-canvas composition and spatial relationships.",
     "reasoning": "ViT (Dosovitskiy et al. 2021) splits the image into 16x16 patches and uses self-attention to model relationships between all patches at once. Pretrained on ImageNet-21k (bigger than ImageNet-1k used by ResNet/EfficientNet). Architecturally very different from CNNs, so its errors should be different too -- good for the ensemble.",
     "action": "Implemented vit_model.py using TF Hub (sayakpaul/vit_b16_fe/1). Same head and two-phase training as the other models.",
-    "outcome": "Pending -- needs training run. Note: hub.KerasLayer doesn't support partial unfreezing, so Phase 2 unfreezes everything at LR=1e-5."
+    "outcome": "ViT frozen test accuracy: 79.5%. Fine-tuning skipped (86M params on CPU = ~12h/epoch). Frozen ViT still competitive for the ensemble."
   },
   {
     "id": 13,
@@ -114,7 +114,7 @@
     "context": "Paintings in the dataset come from different scanners/cameras with different lighting and colour profiles.",
     "reasoning": "Average predictions over 5 gently augmented views of each test image. Only flip + small brightness/contrast (+-5%). No crops -- we showed in decision #6 that crops hurt for paintings. Costs 5x inference time but no extra training.",
     "action": "Implemented tta.py with tta_predict().",
-    "outcome": "Pending -- needs inference run."
+    "outcome": "TTA results: ResNet50: 78.8% -> 78.9% (+0.1%), EfficientNetB2: 76.1% -> 76.6% (+0.5%), ViT: 79.5% -> 79.6% (+0.1%)"
   },
   {
     "id": 14,
@@ -123,6 +123,6 @@
     "context": "Phase 2 ensemble used equal weights, but different models are better at different artists.",
     "reasoning": "Weight each model per class based on its validation accuracy for that artist. Normalise so weights sum to 1 per class. The ensemble then automatically relies more on whichever model is strongest for a given artist.",
     "action": "Implemented ensemble_weighted.py. Both equal-weight and per-class-weighted 3-model ensembles will be evaluated.",
-    "outcome": "Pending -- needs trained ViT + inference."
+    "outcome": "Per-class weighted: 83.4%. Equal-weight: 83.2%. Weighted beats equal by 0.2%."
   }
 ]
