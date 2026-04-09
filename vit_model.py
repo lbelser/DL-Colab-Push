@@ -13,8 +13,8 @@ good third model for the ensemble since its mistakes will be different.
 
 import tensorflow as tf
 import tensorflow_hub as hub
-from tensorflow import keras
-from tensorflow.keras import layers, Model
+import tf_keras
+from tf_keras import layers, Model
 
 from config import IMG_SIZE, NUM_CLASSES
 
